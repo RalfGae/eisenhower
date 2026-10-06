@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#E9EDF1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12161C" media="(prefers-color-scheme: dark)">
+<title>Eisenhower</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#E9EDF1; --surface:#FFFFFF; --ink:#18202B; --muted:#5E6B7A; --line:#D3DAE2;
+  --q1:#C2283F; --q2:#17806F; --q3:#B7790B; --q4:#6E6A86;
+  --radius-card:6px; --radius-sheet:16px;
+  --font: "Segoe UI Variable", "Roboto Flex", Roboto, system-ui, -apple-system, sans-serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#12161C; --surface:#1C222B; --ink:#E6EBF1; --muted:#93A0AF; --line:#2B3440;
+    --q1:#F0657A; --q2:#3FC1AA; --q3:#E8AE3A; --q4:#A6A1C4;
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg); color:var(--ink); font:15px/1.4 var(--font);
+  display:flex; flex-direction:column; overflow:hidden;
+  padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);
+  -webkit-tap-highlight-color:transparent;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+/* Kopfzeile */
+header{display:flex;align-items:center;gap:8px;padding:10px 12px 6px}
+.brand{flex:1;min-width:0}
+.brand h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-.01em}
+#status{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#status.err{color:var(--q1)}
+.iconbtn{height:40px;min-width:40px;padding:0 10px;border-radius:20px;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:14px}
+.iconbtn:active{background:var(--line)}
+#archiveBtn.drop-hot{background:var(--ink);color:var(--bg)}
+#archiveCount{font-variant-numeric:tabular-nums;color:var(--muted)}
+#archiveBtn.drop-hot #archiveCount{color:inherit}
+
+/* Tag-Filter */
+#tags{display:flex;gap:6px;overflow-x:auto;padding:0 12px 8px;scrollbar-width:none}
+#tags:empty{display:none}
+.chip{flex:none;font-size:13px;padding:4px 10px;border-radius:14px;border:1px solid var(--line);background:var(--surface)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+/* Matrix mit Achsen */
+#matrix{
+  flex:1;min-height:0;display:grid;
+  grid-template-columns:18px 1fr 1fr; grid-template-rows:18px 1fr 1fr;
+  gap:6px;padding:0 8px 8px 4px;
+}
+.axis{font-size:11px;color:var(--muted);display:flex;align-items:center;justify-content:center;letter-spacing:.02em}
+.axis.v{writing-mode:vertical-rl;transform:rotate(180deg)}
+.quad{
+  min-height:0;display:flex;flex-direction:column;background:var(--surface);
+  border-radius:10px;border-top:4px solid var(--qc);overflow:hidden;
+  transition:box-shadow .12s, transform .12s;
+}
+.quad.drop-hot{box-shadow:0 0 0 2px var(--qc);transform:scale(1.01)}
+.quad[data-drop="q1"]{--qc:var(--q1)} .quad[data-drop="q2"]{--qc:var(--q2)}
+.quad[data-drop="q3"]{--qc:var(--q3)} .quad[data-drop="q4"]{--qc:var(--q4)}
+.qhead{display:flex;align-items:center;gap:6px;padding:6px 4px 4px 10px}
+.qhead h2{flex:1;margin:0;font-size:14px;font-weight:700;color:var(--qc)}
+.qcount{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.qadd{width:34px;height:34px;border-radius:17px;font-size:22px;line-height:1;color:var(--qc)}
+.qadd:active{background:var(--line)}
+.list{flex:1;overflow-y:auto;padding:2px 6px 8px;display:flex;flex-direction:column;gap:5px;overscroll-behavior:contain}
+.empty{font-size:12px;color:var(--muted);padding:6px 4px}
+
+/* Karten */
+.card{
+  display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border-radius:var(--radius-card);
+  background:var(--bg);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:pan-y;
+}
+.card.dragging{opacity:.3}
+.check{flex:none;width:20px;height:20px;margin-top:1px;border-radius:50%;border:2px solid var(--qc,var(--muted))}
+.card .body{min-width:0;flex:1}
+.card .t{font-size:14px;overflow-wrap:anywhere}
+.card .m{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;font-size:11px;color:var(--muted)}
+.card .m span{padding:0 6px;border-radius:8px;border:1px solid var(--line)}
+.ghost{position:fixed;z-index:50;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.25);transform:rotate(-1.5deg);background:var(--surface)}
+body.is-dragging{cursor:grabbing}
+
+/* Dialoge als Bottom-Sheet */
+dialog{
+  border:0;padding:0;margin:auto auto 0;width:100%;max-width:560px;max-height:92dvh;
+  background:var(--surface);color:var(--ink);border-radius:var(--radius-sheet) var(--radius-sheet) 0 0;
+}
+dialog::backdrop{background:rgba(10,14,20,.45)}
+.sheet{padding:16px 16px calc(16px + env(safe-area-inset-bottom,0));display:flex;flex-direction:column;gap:12px}
+.sheet h3{margin:0;font-size:17px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+input[type=text],textarea{
+  font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);
+  border-radius:8px;padding:10px;width:100%;
+}
+textarea{resize:vertical;min-height:84px}
+.qpick{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.qpick button{padding:10px 8px;border-radius:8px;border:2px solid var(--line);font-size:14px;text-align:left}
+.qpick button[aria-pressed="true"]{border-color:var(--qc);color:var(--qc);font-weight:700}
+.qpick small{display:block;font-size:11px;color:var(--muted);font-weight:400}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{flex:1;padding:12px;border-radius:10px;border:1px solid var(--line);font-weight:600;text-align:center}
+.btn.primary{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.btn.danger{color:var(--q1)}
+.note{font-size:13px;color:var(--muted);margin:0}
+.alist{display:flex;flex-direction:column;gap:6px;overflow-y:auto;max-height:60dvh}
+.aitem{display:flex;gap:8px;align-items:center;padding:8px;border-radius:8px;background:var(--bg)}
+.aitem .body{flex:1;min-width:0}
+.aitem .t{text-decoration:line-through;color:var(--muted);overflow-wrap:anywhere}
+.aitem small{color:var(--muted);font-size:11px}
+.aitem button{font-size:13px;padding:6px 8px;border-radius:6px}
+.aitem button:active{background:var(--line)}
+
+/* Verbinden-Banner & Toast */
+#connect{margin:0 12px 8px;padding:10px 12px;border-radius:10px;background:var(--ink);color:var(--bg);display:none;align-items:center;gap:10px;font-size:14px}
+#connect.show{display:flex}
+#connect span{flex:1}
+#connect button{font-weight:700;text-decoration:underline}
+#toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0));transform:translateX(-50%) translateY(120%);
+  background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;display:flex;gap:14px;align-items:center;
+  font-size:14px;transition:transform .2s;z-index:60;max-width:92vw}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast button{font-weight:700;color:inherit}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Eisenhower</h1>
+    <div id="status">Lädt …</div>
+  </div>
+  <button class="iconbtn" id="archiveBtn" data-drop="done" aria-label="Erledigt-Archiv öffnen">✓ <span id="archiveCount">0</span></button>
+  <button class="iconbtn" id="menuBtn" aria-label="Datei und Optionen">⋯</button>
+</header>
+<div id="connect"><span id="connectText"></span><button id="connectBtn">Erlauben</button></div>
+<div id="tags" role="toolbar" aria-label="Nach Tag filtern"></div>
+
+<main id="matrix">
+  <div></div>
+  <div class="axis">dringend</div>
+  <div class="axis">nicht dringend</div>
+  <div class="axis v">wichtig</div>
+  <section class="quad" data-drop="q1"></section>
+  <section class="quad" data-drop="q2"></section>
+  <div class="axis v">unwichtig</div>
+  <section class="quad" data-drop="q3"></section>
+  <section class="quad" data-drop="q4"></section>
+</main>
+
+<!-- Aufgabe bearbeiten -->
+<dialog id="editDlg">
+  <form class="sheet" method="dialog" id="editForm">
+    <h3 id="editTitle">Neue Aufgabe</h3>
+    <label class="f">Aufgabe<input type="text" id="fTitle" required autocomplete="off" enterkeyhint="done"></label>
+    <div class="qpick" id="fQuad"></div>
+    <label class="f">Notizen<textarea id="fNotes"></textarea></label>
+    <label class="f">Tags, durch Komma getrennt<input type="text" id="fTags" autocomplete="off" placeholder="z. B. arbeit, haus"></label>
+    <div class="row">
+      <button type="button" class="btn danger" id="fDelete">Löschen</button>
+      <button type="button" class="btn" id="fDone">Erledigt</button>
+    </div>
+    <div class="row">
+      <button type="button" class="btn" id="fCancel">Abbrechen</button>
+      <button type="submit" class="btn primary" id="fSave">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Archiv -->
+<dialog id="archiveDlg">
+  <div class="sheet">
+    <h3>Erledigt</h3>
+    <div class="alist" id="alist"></div>
+    <div class="row"><button class="btn" id="archiveClose">Schließen</button></div>
+  </div>
+</dialog>
+
+<!-- Datei & Optionen -->
+<dialog id="menuDlg">
+  <div class="sheet">
+    <h3>Datei</h3>
+    <p class="note" id="menuInfo"></p>
+    <div class="row" id="fileRow">
+      <button class="btn" id="openFileBtn">Datei öffnen</button>
+      <button class="btn" id="newFileBtn">Neue Datei anlegen</button>
+    </div>
+    <div class="row">
+      <button class="btn" id="reloadBtn">Neu einlesen</button>
+      <button class="btn" id="exportBtn">Kopie herunterladen</button>
+      <button class="btn" id="importBtn">JSON einlesen</button>
+    </div>
+    <input type="file" id="importInput" accept=".json,application/json" hidden>
+    <div class="row"><button class="btn" id="menuClose">Schließen</button></div>
+  </div>
+</dialog>
+
+<div id="toast" role="status"><span id="toastText"></span><button id="toastBtn">Rückgängig</button></div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const Q = {
+  q1:{urgent:true, important:true, name:"Sofort tun", hint:"dringend & wichtig"},
+  q2:{urgent:false,important:true, name:"Einplanen", hint:"wichtig, nicht dringend"},
+  q3:{urgent:true, important:false,name:"Delegieren",hint:"dringend, unwichtig"},
+  q4:{urgent:false,important:false,name:"Weglassen", hint:"weder noch"}
+};
+const qOf = t => t.important ? (t.urgent ? "q1" : "q2") : (t.urgent ? "q3" : "q4");
+const now = () => new Date().toISOString();
+const uid = () => crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+const esc = s => s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ts = s => Date.parse(s) || 0;
+const hhmm = () => new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
+const TOMBSTONE_DAYS = 30;
+const FS = "showOpenFilePicker" in window;
+
+const state = { tasks: [], filter: null };
+let fileHandle = null, mode = "none", dirty = false, saveTimer = null, saving = Promise.resolve();
+
+/* ---------- Datenmodell ---------- */
+function normalize(doc){
+  if(!doc || !Array.isArray(doc.tasks)) return [];
+  return doc.tasks.filter(t => t && t.id).map(t => ({
+    id:String(t.id), title:String(t.title ?? ""), notes:String(t.notes ?? ""),
+    tags:Array.isArray(t.tags) ? t.tags.map(x => String(x).trim().toLowerCase()).filter(Boolean) : [],
+    urgent:!!t.urgent, important:!!t.important,
+    done:!!t.done, doneAt:t.doneAt || null, deleted:!!t.deleted,
+    order:Number(t.order) || 0,
+    createdAt:t.createdAt || "1970-01-01T00:00:00.000Z",
+    updatedAt:t.updatedAt || t.createdAt || "1970-01-01T00:00:00.000Z"
+  }));
+}
+// Pro Aufgabe gewinnt der neuere Stand (updatedAt). Gelöschte bleiben 30 Tage als Grabstein.
+function merge(a, b){
+  const m = new Map();
+  for(const t of [...a, ...b]){
+    const e = m.get(t.id);
+    if(!e || ts(t.updatedAt) > ts(e.updatedAt)) m.set(t.id, t);
+  }
+  const cutoff = Date.now() - TOMBSTONE_DAYS * 864e5;
+  return [...m.values()].filter(t => !(t.deleted && ts(t.updatedAt) < cutoff));
+}
+function toDoc(){
+  const tasks = [...state.tasks].sort((x,y) => ts(x.createdAt) - ts(y.createdAt));
+  return { schema:"eisenhower-todos", version:1, updatedAt:now(), tasks };
+}
+
+/* ---------- Speicher: IndexedDB (Datei-Handle) + Cache ---------- */
+function idb(){
+  return new Promise((res, rej) => {
+    const r = indexedDB.open("eisenhower", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("kv");
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+async function kv(op, k, v){
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const st = db.transaction("kv", op === "get" ? "readonly" : "readwrite").objectStore("kv");
+    const r = op === "get" ? st.get(k) : st.put(v, k);
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+function cacheLocal(){ try{ localStorage.setItem("eisenhower-cache", JSON.stringify({tasks:state.tasks, dirty})); }catch(e){} }
+function loadCache(){
+  try{
+    const c = JSON.parse(localStorage.getItem("eisenhower-cache") || "null");
+    if(c){ state.tasks = normalize(c); dirty = !!c.dirty; }
+  }catch(e){}
+}
+
+/* ---------- Datei lesen/schreiben ---------- */
+async function readFileDoc(){
+  const txt = await (await fileHandle.getFile()).text();
+  if(!txt.trim()) return { tasks: [] };
+  try { return JSON.parse(txt); }
+  catch(e){ throw new Error("Datei ist kein gültiges JSON – wird nicht überschrieben"); }
+}
+function setStatus(msg, err=false){ const s = $("#status"); s.textContent = msg; s.classList.toggle("err", err); }
+function fileLabel(){ return fileHandle ? fileHandle.name : "keine Datei"; }
+
+function schedule(){
+  dirty = true; cacheLocal();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flush, 500);
+  if(mode === "file") setStatus(fileLabel() + " · ungespeichert");
+}
+function flush(){
+  saving = saving.then(doFlush).catch(e => setStatus(e.message, true));
+  return saving;
+}
+async function doFlush(){
+  if(mode !== "file"){ cacheLocal(); setStatus(mode === "local" ? "Nur im Browser gespeichert" : "Nicht mit Datei verbunden"); return; }
+  setStatus(fileLabel() + " · speichert …");
+  const remote = normalize(await readFileDoc());
+  state.tasks = merge(state.tasks, remote);
+  const w = await fileHandle.createWritable();
+  await w.write(JSON.stringify(toDoc(), null, 2) + "\n");
+  await w.close();
+  dirty = false; cacheLocal(); render();
+  setStatus(fileLabel() + " · gespeichert " + hhmm());
+}
+async function pull(){
+  if(mode !== "file") return;
+  try{
+    state.tasks = merge(state.tasks, normalize(await readFileDoc()));
+    cacheLocal(); render();
+    if(dirty) flush(); else setStatus(fileLabel() + " · aktuell " + hhmm());
+  }catch(e){ setStatus(e.message, true); }
+}
+async function connectHandle(h){
+  fileHandle = h; await kv("put", "handle", h);
+  const p = await h.requestPermission({ mode:"readwrite" });
+  if(p !== "granted"){ setStatus("Schreibzugriff verweigert", true); return; }
+  mode = "file"; $("#connect").classList.remove("show");
+  dirty = true; await flush();
+}
+const jsonTypes = [{ description:"JSON", accept:{ "application/json":[".json"] } }];
+async function openFile(){
+  try{ const [h] = await showOpenFilePicker({ types: jsonTypes }); await connectHandle(h); }
+  catch(e){ if(e.name !== "AbortError") setStatus(e.message, true); }
+}
+async function newFile(){
+  try{ const h = await showSaveFilePicker({ suggestedName:"todos.json", types: jsonTypes }); await connectHandle(h); }
+  catch(e){ if(e.name !== "AbortError") setStatus(e.message, true); }
+}
+
+/* ---------- Änderungen ---------- */
+const find = id => state.tasks.find(t => t.id === id);
+function update(id, patch){
+  const t = find(id); if(!t) return;
+  Object.assign(t, patch, { updatedAt: now() });
+  schedule(); render();
+}
+function complete(id){
+  const t = find(id); if(!t) return;
+  const prev = { done:t.done, doneAt:t.doneAt };
+  update(id, { done:true, doneAt:now() });
+  toast("Erledigt", () => update(id, prev));
+}
+function removeTask(id){
+  const t = find(id); if(!t) return;
+  update(id, { deleted:true });
+  toast("Gelöscht", () => update(id, { deleted:false }));
+}
+
+/* ---------- Darstellung ---------- */
+function visible(t){ return !t.deleted && !t.done && (!state.filter || t.tags.includes(state.filter)); }
+function render(){
+  for(const q of Object.keys(Q)){
+    const items = state.tasks.filter(t => visible(t) && qOf(t) === q).sort((a,b) => a.order - b.order);
+    const sec = document.querySelector(`.quad[data-drop="${q}"]`);
+    sec.innerHTML = `
+      <div class="qhead"><h2>${Q[q].name}</h2><span class="qcount">${items.length || ""}</span>
+        <button class="qadd" data-add="${q}" aria-label="Aufgabe zu ${Q[q].name} hinzufügen">+</button></div>
+      <div class="list">${items.length ? items.map(card).join("") : `<div class="empty">Leer</div>`}</div>`;
+  }
+  const done = state.tasks.filter(t => t.done && !t.deleted);
+  $("#archiveCount").textContent = done.length;
+  const tags = [...new Set(state.tasks.filter(t => !t.deleted && !t.done).flatMap(t => t.tags))].sort();
+  if(state.filter && !tags.includes(state.filter)) state.filter = null;
+  $("#tags").innerHTML = tags.length ? [`<button class="chip" data-tag="" aria-pressed="${!state.filter}">Alle</button>`,
+    ...tags.map(g => `<button class="chip" data-tag="${esc(g)}" aria-pressed="${state.filter===g}">#${esc(g)}</button>`)].join("") : "";
+  if($("#archiveDlg").open) renderArchive();
+}
+function card(t){
+  const meta = [...(t.notes.trim() ? ["Notiz"] : []), ...t.tags.map(g => "#" + g)];
+  return `<div class="card" data-id="${esc(t.id)}">
+    <button class="check" data-check="${esc(t.id)}" aria-label="Als erledigt markieren"></button>
+    <div class="body"><div class="t">${esc(t.title)}</div>
+    ${meta.length ? `<div class="m">${meta.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : ""}</div></div>`;
+}
+function renderArchive(){
+  const done = state.tasks.filter(t => t.done && !t.deleted).sort((a,b) => ts(b.doneAt) - ts(a.doneAt));
+  $("#alist").innerHTML = done.length ? done.map(t => `
+    <div class="aitem"><div class="body"><div class="t">${esc(t.title)}</div>
+      <small>${t.doneAt ? new Date(t.doneAt).toLocaleDateString("de-DE") : ""} · ${Q[qOf(t)].name}${t.tags.length ? " · " + t.tags.map(g => "#" + esc(g)).join(" ") : ""}</small></div>
+      <button data-restore="${esc(t.id)}">Zurückholen</button>
+      <button data-purge="${esc(t.id)}">Löschen</button></div>`).join("")
+    : `<p class="note">Noch nichts erledigt. Hake Aufgaben ab oder ziehe sie auf ✓ oben rechts.</p>`;
+}
+
+/* ---------- Editor ---------- */
+let editing = null, pickQ = "q2";
+function renderPick(){
+  $("#fQuad").innerHTML = Object.entries(Q).map(([k,v]) =>
+    `<button type="button" data-q="${k}" style="--qc:var(--${k})" aria-pressed="${k===pickQ}">${v.name}<small>${v.hint}</small></button>`).join("");
+}
+function openEditor(id, q){
+  editing = id ? find(id) : null;
+  pickQ = editing ? qOf(editing) : q;
+  $("#editTitle").textContent = editing ? "Aufgabe bearbeiten" : "Neue Aufgabe";
+  $("#fTitle").value = editing ? editing.title : "";
+  $("#fNotes").value = editing ? editing.notes : "";
+  $("#fTags").value = editing ? editing.tags.join(", ") : (state.filter || "");
+  $("#fDelete").hidden = $("#fDone").hidden = !editing;
+  renderPick(); $("#editDlg").showModal();
+  if(!editing) $("#fTitle").focus();
+}
+$("#fQuad").addEventListener("click", e => { const b = e.target.closest("[data-q]"); if(b){ pickQ = b.dataset.q; renderPick(); } });
+$("#editForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const title = $("#fTitle").value.trim(); if(!title) return;
+  const data = { title, notes:$("#fNotes").value,
+    tags:[...new Set($("#fTags").value.split(",").map(x => x.trim().toLowerCase().replace(/^#/,"")).filter(Boolean))],
+    urgent:Q[pickQ].urgent, important:Q[pickQ].important };
+  if(editing){
+    if(qOf(editing) !== pickQ) data.order = Date.now();
+    update(editing.id, data);
+  } else {
+    const t = now();
+    state.tasks.push({ id:uid(), ...data, done:false, doneAt:null, deleted:false, order:Date.now(), createdAt:t, updatedAt:t });
+    schedule(); render();
+  }
+  $("#editDlg").close();
+});
+$("#fCancel").onclick = () => $("#editDlg").close();
+$("#fDone").onclick = () => { const id = editing.id; $("#editDlg").close(); complete(id); };
+$("#fDelete").onclick = () => { const id = editing.id; $("#editDlg").close(); removeTask(id); };
+
+/* ---------- Klicks ---------- */
+$("#matrix").addEventListener("click", e => {
+  const add = e.target.closest("[data-add]"); if(add) return openEditor(null, add.dataset.add);
+  const chk = e.target.closest("[data-check]"); if(chk) return complete(chk.dataset.check);
+});
+$("#tags").addEventListener("click", e => {
+  const c = e.target.closest("[data-tag]"); if(!c) return;
+  state.filter = c.dataset.tag || null; render();
+});
+$("#archiveBtn").onclick = () => { renderArchive(); $("#archiveDlg").showModal(); };
+$("#archiveClose").onclick = () => $("#archiveDlg").close();
+$("#alist").addEventListener("click", e => {
+  const r = e.target.closest("[data-restore]"); if(r) return update(r.dataset.restore, { done:false, doneAt:null, order:Date.now() });
+  const p = e.target.closest("[data-purge]"); if(p) return removeTask(p.dataset.purge);
+});
+for(const d of document.querySelectorAll("dialog"))
+  d.addEventListener("click", e => { if(e.target === d) d.close(); });
+
+/* ---------- Menü ---------- */
+$("#menuBtn").onclick = () => {
+  $("#menuInfo").textContent = !FS
+    ? "Dieser Browser kann nicht direkt in Dateien schreiben. Aufgaben liegen im Browser; nutze Kopie herunterladen und JSON einlesen."
+    : mode === "file" ? `Verbunden mit ${fileLabel()}. Änderungen werden automatisch gespeichert.`
+    : "Noch keine Datei verbunden. Öffne deine todos.json im Syncthing-Ordner.";
+  $("#fileRow").hidden = !FS;
+  $("#newFileBtn").hidden = !("showSaveFilePicker" in window);
+  $("#reloadBtn").hidden = mode !== "file";
+  $("#menuDlg").showModal();
+};
+$("#menuClose").onclick = () => $("#menuDlg").close();
+$("#openFileBtn").onclick = () => { $("#menuDlg").close(); openFile(); };
+$("#newFileBtn").onclick = () => { $("#menuDlg").close(); newFile(); };
+$("#reloadBtn").onclick = () => { $("#menuDlg").close(); pull(); };
+$("#exportBtn").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(toDoc(), null, 2)], { type:"application/json" }));
+  a.download = "todos.json"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$("#importBtn").onclick = () => $("#importInput").click();
+$("#importInput").onchange = async e => {
+  const f = e.target.files[0]; if(!f) return;
+  try{
+    const n = normalize(JSON.parse(await f.text()));
+    state.tasks = merge(state.tasks, n); schedule(); render();
+    toast(`${n.length} Aufgaben eingelesen`);
+  }catch(err){ setStatus("Import fehlgeschlagen: kein gültiges JSON", true); }
+  e.target.value = ""; $("#menuDlg").close();
+};
+
+/* ---------- Toast ---------- */
+let toastTimer;
+function toast(msg, undo){
+  $("#toastText").textContent = msg;
+  const b = $("#toastBtn"); b.hidden = !undo;
+  b.onclick = () => { undo && undo(); $("#toast").classList.remove("show"); };
+  $("#toast").classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => $("#toast").classList.remove("show"), 4000);
+}
+
+/* ---------- Drag & Drop (lange drücken auf Touch, ziehen mit Maus) ---------- */
+let drag = null;
+const LONG_PRESS = 280, SLOP = 8;
+$("#matrix").addEventListener("pointerdown", e => {
+  const c = e.target.closest(".card");
+  if(!c || e.target.closest("[data-check]") || e.button > 0) return;
+  drag = { id:c.dataset.id, el:c, x0:e.clientX, y0:e.clientY, x:e.clientX, y:e.clientY, active:false, mouse:e.pointerType === "mouse", hot:null };
+  if(!drag.mouse) drag.timer = setTimeout(startDrag, LONG_PRESS);
+});
+document.addEventListener("pointermove", e => {
+  if(!drag) return;
+  drag.x = e.clientX; drag.y = e.clientY;
+  const dist = Math.hypot(drag.x - drag.x0, drag.y - drag.y0);
+  if(!drag.active){
+    if(drag.mouse && dist > 6) startDrag();
+    else if(!drag.mouse && dist > SLOP){ clearTimeout(drag.timer); drag = null; }
+    return;
+  }
+  drag.ghost.style.left = (drag.x - drag.ox) + "px";
+  drag.ghost.style.top = (drag.y - drag.oy) + "px";
+  const hit = document.elementFromPoint(drag.x, drag.y)?.closest("[data-drop]") || null;
+  if(hit !== drag.hot){ drag.hot?.classList.remove("drop-hot"); hit?.classList.add("drop-hot"); drag.hot = hit; }
+});
+document.addEventListener("pointerup", () => {
+  if(!drag) return;
+  clearTimeout(drag.timer);
+  const d = drag; endDrag();
+  if(d.active){
+    const target = d.hot?.dataset.drop;
+    if(target === "done") complete(d.id);
+    else if(target && Q[target]){
+      const t = find(d.id);
+      if(t && qOf(t) !== target) update(d.id, { urgent:Q[target].urgent, important:Q[target].important, order:Date.now() });
+    }
+  } else if(Math.hypot(d.x - d.x0, d.y - d.y0) < SLOP) openEditor(d.id);
+});
+document.addEventListener("pointercancel", () => { if(drag){ clearTimeout(drag.timer); endDrag(); } });
+document.addEventListener("touchmove", e => { if(drag?.active) e.preventDefault(); }, { passive:false });
+document.addEventListener("contextmenu", e => { if(e.target.closest(".card")) e.preventDefault(); });
+function startDrag(){
+  if(!drag) return;
+  const r = drag.el.getBoundingClientRect();
+  drag.ox = drag.x - r.left; drag.oy = drag.y - r.top;
+  const g = drag.el.cloneNode(true);
+  g.classList.add("ghost"); g.style.width = r.width + "px";
+  g.style.left = r.left + "px"; g.style.top = r.top + "px";
+  g.style.setProperty("--qc", getComputedStyle(drag.el).getPropertyValue("--qc"));
+  document.body.appendChild(g);
+  drag.ghost = g; drag.active = true;
+  drag.el.classList.add("dragging"); document.body.classList.add("is-dragging");
+  navigator.vibrate?.(15);
+}
+function endDrag(){
+  if(drag?.ghost) drag.ghost.remove();
+  drag?.el.classList.remove("dragging"); drag?.hot?.classList.remove("drop-hot");
+  document.body.classList.remove("is-dragging"); drag = null;
+}
+
+/* ---------- Start ---------- */
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "visible") pull();
+  else if(dirty) flush();
+});
+(async function init(){
+  loadCache(); render();
+  if(!FS){ mode = "local"; setStatus("Nur im Browser gespeichert"); return; }
+  let h = null; try{ h = await kv("get", "handle"); }catch(e){}
+  if(!h){ setStatus("Keine Datei verbunden – Menü ⋯ öffnen"); return; }
+  fileHandle = h;
+  const p = await h.queryPermission({ mode:"readwrite" });
+  if(p === "granted"){ mode = "file"; await pull(); return; }
+  setStatus(fileLabel() + " · Zugriff nötig");
+  $("#connectText").textContent = `Zugriff auf ${h.name} erlauben`;
+  $("#connect").classList.add("show");
+  $("#connectBtn").onclick = async () => {
+    if(await h.requestPermission({ mode:"readwrite" }) === "granted"){
+      mode = "file"; $("#connect").classList.remove("show"); await pull();
+    }
+  };
+})();
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
